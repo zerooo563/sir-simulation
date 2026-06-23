@@ -1,34 +1,22 @@
 import streamlit as st
 import numpy as np
-import pandas as pd
-import plotly.graph_objects as go
+import json
+import os
 
-# إعدادات الصفحة
-st.set_page_config(page_title="SIR Model Simulation", page_icon="🌊", layout="wide")
+# 1. إعدادات الشاشة الكاملة وإخفاء هوامش Streamlit لتظهر واجهتك المخصصة فقط
+st.set_page_config(page_title="SIR Model Simulation & Portfolio", layout="wide")
 
-st.title("🌊 SIR Model Epidemic Simulation (RK4 Method)")
-st.markdown("### المحاكاة الرقمية لانتشار الأوبئة باستخدام طريقة رونج-كوتا من الرتبة الرابعة")
-st.write("تم تطوير هذا النموذج لمحاكاة حركة انتشار المرض بين الأفراد بدقة رياضية عالية.")
+st.markdown("""
+    <style>
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    body {margin: 0; padding: 0; background-color: #000000;}
+    .stApp {background-color: #000000;}
+    </style>
+""", unsafe_allow_html=True)
 
-# القائمة الجانبية للمدخلات
-st.sidebar.header("⚙️ معطيات النموذج والمحاكاة")
-
-# حجم العينة الافتراضي 40 ليطابق الدراسة
-N = st.sidebar.number_input("إجمالي عدد السكان (N)", min_value=10, max_value=100000, value=40)
-I0 = st.sidebar.number_input("عدد المصابين الأولائي (I0)", min_value=1, max_value=N, value=1)
-R0_init = st.sidebar.number_input("عدد المتعافين الأولي (R0)", min_value=0, max_value=N, value=0)
-S0 = N - I0 - R0_init
-
-st.sidebar.markdown("---")
-beta = st.sidebar.slider("معدل انتقال العدوى (β)", 0.0, 2.0, 0.4, step=0.01)
-gamma = st.sidebar.slider("معدل الشفاء (γ)", 0.0, 1.0, 0.1, step=0.01)
-days = st.sidebar.slider("فترة المحاكاة بالكامل (الأيام)", 10, 200, 100)
-
-# حساب عدد التكاثر الأساسي R0 الرياضي
-r_zero = beta / gamma if gamma > 0 else 0
-st.sidebar.metric(label="عدد التكاثر الأساسي (R₀)", value=f"{r_zero:.2f}")
-
-# خوارزمية الحل العددي Runge-Kutta 4th Order (RK4)
+# 2. المحرك الرياضي (RK4) لحساب انتشار الوباء لنموذج SIR (أساس مشروع تخرجك)
 def rk4_sir(S0, I0, R0, beta, gamma, N, days, dt=0.1):
     steps = int(days / dt)
     t = np.linspace(0, days, steps + 1)
@@ -40,69 +28,73 @@ def rk4_sir(S0, I0, R0, beta, gamma, N, days, dt=0.1):
     S[0], I[0], R[0] = S0, I0, R0
     
     for k in range(steps):
-        # معادلات التفاضل لنموذج SIR
+        # المعادلات التفاضلية للنموذج
         def f_S(s, i): return - (beta * s * i) / N
         def f_I(s, i): return ((beta * s * i) / N) - (gamma * i)
-        def f_R(i): return gamma * i
         
-        # حساب معاملات K1
+        # حساب معاملات K1 لـ S و I
         k1_S = f_S(S[k], I[k])
         k1_I = f_I(S[k], I[k])
-        k1_R = f_R(I[k])
         
         # حساب معاملات K2
         k2_S = f_S(S[k] + 0.5 * dt * k1_S, I[k] + 0.5 * dt * k1_I)
         k2_I = f_I(S[k] + 0.5 * dt * k1_S, I[k] + 0.5 * dt * k1_I)
-        k2_R = f_R(I[k] + 0.5 * dt * k1_I)
         
         # حساب معاملات K3
         k3_S = f_S(S[k] + 0.5 * dt * k2_S, I[k] + 0.5 * dt * k2_I)
         k3_I = f_I(S[k] + 0.5 * dt * k2_S, I[k] + 0.5 * dt * k2_I)
-        k3_R = f_R(I[k] + 0.5 * dt * k2_I)
         
         # حساب معاملات K4
         k4_S = f_S(S[k] + dt * k3_S, I[k] + dt * k3_I)
         k4_I = f_I(S[k] + dt * k3_S, I[k] + dt * k3_I)
-        k4_R = f_R(I[k] + dt * k3_I)
         
-        # تحديث القيم للخطوة القادمة بوزن نسبي متزن
+        # تحديث القيم للخطوة التالية
         S[k+1] = S[k] + (dt / 6.0) * (k1_S + 2*k2_S + 2*k3_S + k4_S)
         I[k+1] = I[k] + (dt / 6.0) * (k1_I + 2*k2_I + 2*k3_I + k4_I)
-        R[k+1] = N - S[k+1] - I[k+1] # للحفاظ على ثبات حجم المجتمع بدقة قانون الانحفاظ
+        R[k+1] = N - S[k+1] - I[k+1] # الحفاظ على ثبات حجم المجتمع (N=40)
         
-    return t, S, I, R
+    return t.tolist(), S.tolist(), I.tolist(), R.tolist()
 
-# تشغيل المحاكاة
-t, S, I, R = rk4_sir(S0, I0, R0_init, beta, gamma, N, days)
+# تشغيل الحسابات الرياضية وتثبيت حجم العينة على 40 فرد ليطابق دراستك العلمية
+t_res, S_res, I_res, R_res = rk4_sir(S0=39, I0=1, R0=0, beta=0.4, gamma=0.1, N=40, days=100)
 
-# إنشاء الرسم البياني التفاعلي بـ Plotly لمظهر فخم ومتناسق مع الوضع المظلم
-fig = go.Figure()
-fig.add_trace(go.Scatter(x=t, y=S, name='المعرضون للإصابة (Susceptible)', line=dict(color='#3b82f6', width=3)))
-fig.add_trace(go.Scatter(x=t, y=I, name='المصابون (Infected)', line=dict(color='#ef4444', width=3)))
-fig.add_trace(go.Scatter(x=t, y=R, name='المتعافون (Recovered)', line=dict(color='#10b981', width=3)))
+# تحويل مصفوفات الحل العددي إلى صيغة JSON لكي يقرأها ملف الجافا سكريبت المخصص لديك
+simulation_json = json.dumps({
+    "time": t_res,
+    "susceptible": S_res,
+    "infected": I_res,
+    "recovered": R_res
+})
 
-fig.update_layout(
-    title="منحنيات تطور الحالة الوبائية عبر الزمن",
-    xaxis_title="الأيام",
-    yaxis_title="عدد الأفراد",
-    template="plotly_dark",
-    background_color="rgba(0,0,0,0)",
-    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-)
+# 3. قراءة كافة الملفات الجمالية وحقن البيانات الرياضية داخلها
+def render_full_app(data_to_inject):
+    html_file = "templates/index.html"
+    css_file = "static/style.css"
+    js_file = "static/script.js"
+    
+    # التأكد من أن جميع الملفات متواجدة في مساراتها الصحيحة كما في صور الـ Explorer
+    if os.path.exists(html_file) and os.path.exists(css_file) and os.path.exists(js_file):
+        with open(html_file, "r", encoding="utf-8") as f:
+            html_content = f.read()
+        with open(css_file, "r", encoding="utf-8") as f:
+            css_content = f.read()
+        with open(js_file, "r", encoding="utf-8") as f:
+            js_content = f.read()
+            
+        # إنشاء متغير جافا سكريبت عالمي (Global Variable) يحمل نتائج حسابات الـ SIR الرياضية
+        javascript_data_bridge = f"<script>window.sirSimulationData = {data_to_inject};</script>"
+        
+        # دمج الستاين والبيانات الرياضية داخل الـ Head
+        full_html = html_content.replace(
+            "</head>", f"<style>{css_content}</style>{javascript_data_bridge}</head>"
+        ).replace(
+            "</body>", f"<script>{js_content}</script></body>"
+        )
+        
+        # تشغيل التطبيق بالكامل بكافة مؤثراته البصرية (الروبوت والتموجات) وحجم شاشة كامل 100%
+        st.components.v1.html(full_html, height=1000, scrolling=True)
+    else:
+        st.error("يوجد نقص في ملفات المشروع! تأكد من وجود مجلد templates ومجلد static بجانب ملف app.py مباشرة.")
 
-# عرض الرسم البياني وجدول البيانات
-col1, col2 = st.columns([3, 1])
-
-with col1:
-    st.plotly_chart(fig, use_container_width=True)
-
-with col2:
-    st.markdown("### 📊 ملخص البيانات")
-    max_infected = int(np.max(I))
-    peak_day = t[np.argmax(I)]
-    st.metric("أعلى ذروة للمصابين", f"{max_infected} فرد")
-    st.metric("يوم الوصول للذروة", f"اليوم {peak_day:.1f}")
-
-    # عرض جدول سريع للنتائج
-    df_data = pd.DataFrame({'اليوم': t[::10], 'المعرضين': S[::10], 'المصابين': I[::10], 'المتعافين': R[::10]})
-    st.dataframe(df_data.round(1), hide_index=True)
+# استدعاء وبناء التطبيق المتكامل أونلاين
+render_full_app(simulation_json)
