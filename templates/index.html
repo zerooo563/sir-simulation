@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIR Epidemic Simulator</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Interactive Dashboard for SIR Epidemic Simulation</h1>
+        </header>
+
+        <div class="main-layout">
+            <aside class="sidebar">
+                <h3>Simulation Parameters</h3>
+
+                <div class="param-group">
+                    <label>Total Population (N)</label>
+                    <input type="number" id="N" value="100000" min="1000" max="10000000" step="1000">
+                </div>
+
+                <div class="param-group">
+                    <label>Simulation Timeline (Days)</label>
+                    <input type="range" id="days" min="10" max="365" value="100">
+                    <span id="daysValue">100</span>
+                </div>
+
+                <hr>
+
+                <div class="param-group">
+                    <label>Transmission Rate (β)</label>
+                    <input type="range" id="beta" min="0" max="5" step="0.01" value="0.35">
+                    <span id="betaValue">0.35</span>
+                </div>
+
+                <div class="param-group">
+                    <label>Recovery Rate (γ)</label>
+                    <input type="range" id="gamma" min="0.01" max="1" step="0.01" value="0.10">
+                    <span id="gammaValue">0.10</span>
+                </div>
+
+                <hr>
+
+                <h4>Initial Boundary States</h4>
+                <div class="param-group">
+                    <label>Initial Infected (I₀)</label>
+                    <input type="number" id="I0" value="10" min="1">
+                </div>
+
+                <div class="param-group">
+                    <label>Initial Recovered (R₀)</label>
+                    <input type="text" value="0 (Strict Boundary)" disabled>
+                </div>
+
+                <button id="simulateBtn">Run Simulation</button>
+            </aside>
+
+            <main>
+                <div class="metrics-bar">
+                    <div class="metric-card" id="r0Card">
+                        <span class="metric-label">Basic Reproduction Number (R₀)</span>
+                        <span class="metric-value">—</span>
+                    </div>
+                    <div class="metric-card" id="statusCard">
+                        <span class="metric-label">Epidemiological Regime</span>
+                        <span class="metric-value">—</span>
+                    </div>
+                </div>
+
+                <div id="chart"></div>
+
+                <div class="validation-grid">
+                    <div class="validation-card" id="validation1">
+                        <h4>Population Conservation Check</h4>
+                        <p>Initial Sum: <span id="initSum">—</span></p>
+                        <p>Final Sum: <span id="finalSum">—</span></p>
+                        <p class="status-badge" id="conservationStatus">Waiting...</p>
+                    </div>
+                    <div class="validation-card" id="validation2">
+                        <h4>Boundary State Check</h4>
+                        <p>S(0) = <span id="s0Val">—</span></p>
+                        <p>I(0) = <span id="i0Val">—</span></p>
+                        <p>R(0) = <span id="r0Val">—</span></p>
+                        <p class="status-badge" id="boundaryStatus">Waiting...</p>
+                    </div>
+                    <div class="validation-card" id="validation3">
+                        <h4>Non-Negativity Check</h4>
+                        <p>Min S(t): <span id="minS">—</span></p>
+                        <p>Min I(t): <span id="minI">—</span></p>
+                        <p>Min R(t): <span id="minR">—</span></p>
+                        <p class="status-badge" id="nonnegStatus">Waiting...</p>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
